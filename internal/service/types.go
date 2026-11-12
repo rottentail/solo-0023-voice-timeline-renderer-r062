@@ -13,7 +13,8 @@ type Repository interface {
 	GetSource(string) (domain.SourceAsset, []byte, error)
 	SaveTimeline(domain.Timeline) error
 	GetTimeline(string) (domain.Timeline, error)
-	SaveJob(domain.RenderJob) error
+	CreateJob(domain.RenderJob) error
+	TransitionJob(string, func(*domain.RenderJob) error) (domain.RenderJob, error)
 	GetJob(string) (domain.RenderJob, error)
 	CommitRenderArtifacts(string, []byte, domain.RenderReceipt) error
 	GetRenderOutput(string) ([]byte, domain.RenderReceipt, error)

@@ -8,6 +8,13 @@ import (
 // ErrorKind maps domain failures to transport-neutral categories.
 type ErrorKind string
 
+var (
+	// ErrJobExists signals that a durable render job was already claimed by
+	// another process or request. It is not a client-facing failure; callers
+	// resolve the existing job so idempotent retries keep their prior result.
+	ErrJobExists = errors.New("render job already exists")
+)
+
 const (
 	KindInvalid  ErrorKind = "invalid"
 	KindConflict ErrorKind = "conflict"

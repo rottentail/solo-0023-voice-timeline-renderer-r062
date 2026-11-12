@@ -62,6 +62,18 @@ func (s *Service) CreateTimeline(ctx context.Context, id string, request Timelin
 	candidate.State = "ready"
 	candidate.CreatedAt = time.Now().UTC()
 	if err := s.repo.SaveTimeline(candidate); err != nil {
+		// Another process may have published the same identifier between our
+		// existence check and our commit. Resolve that idempotently when the
+		// stored plan matches exactly, and conflict otherwise.
+		if appErr := domain.AsAppError(err); appErr.Kind == domain.KindConflict {
+			existing, getErr := s.repo.GetTimeline(id)
+			if getErr == nil {
+				if equivalentTimeline(existing, candidate) {
+					return existing, false, nil
+				}
+				return domain.Timeline{}, false, domain.E(domain.KindConflict, "timeline_conflict", "timeline_id", "identifier is already bound to a different timeline")
+			}
+		}
 		return domain.Timeline{}, false, err
 	}
 	return candidate, true, nil

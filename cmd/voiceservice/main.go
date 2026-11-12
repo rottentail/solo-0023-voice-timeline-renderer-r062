@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -27,13 +25,16 @@ func main() {
 		slog.Error("cannot create data directory", "error", err)
 		os.Exit(1)
 	}
-	if err := reclaimUnpublishedAudio(*dataDir); err != nil {
-		slog.Error("cannot reclaim unpublished audio", "error", err)
-		os.Exit(1)
-	}
 	repo, err := storage.NewRepository(*dataDir)
 	if err != nil {
 		slog.Error("cannot initialize repository", "error", err)
+		os.Exit(1)
+	}
+	// Reclaim only temporary media whose owning process has exited. Staging
+	// belonging to another live service process sharing this data directory
+	// is preserved.
+	if err := repo.ReclaimUnpublished(); err != nil {
+		slog.Error("cannot reclaim unpublished audio", "error", err)
 		os.Exit(1)
 	}
 	serviceLayer := service.New(repo, service.DefaultConfig())
@@ -64,37 +65,4 @@ func main() {
 		slog.Error("HTTP service stopped", "error", err)
 		os.Exit(1)
 	}
-}
-
-func reclaimUnpublishedAudio(root string) error {
-	entries, err := os.ReadDir(filepath.Join(root, "tmp"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		media := ""
-		if strings.HasPrefix(entry.Name(), "source-") {
-			media = "source.wav"
-		} else if strings.HasPrefix(entry.Name(), "render-") {
-			media = "output.wav"
-		} else {
-			continue
-		}
-		directory := filepath.Join(root, "tmp", entry.Name())
-		if _, err := os.Stat(filepath.Join(directory, media)); errors.Is(err, os.ErrNotExist) {
-			continue
-		} else if err != nil {
-			return err
-		}
-		if err := os.RemoveAll(directory); err != nil {
-			return err
-		}
-	}
-	return nil
 }

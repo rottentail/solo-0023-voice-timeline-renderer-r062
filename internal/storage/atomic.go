@@ -25,11 +25,10 @@ func writeBytes(path string, data []byte, mode os.FileMode) error {
 }
 
 func writeJSONAtomic(path string, value any, mode os.FileMode) error {
-	payload, err := json.MarshalIndent(value, "", "  ")
+	payload, err := marshalJSON(value)
 	if err != nil {
 		return err
 	}
-	payload = append(payload, '\n')
 	directory := filepath.Dir(path)
 	if err := os.MkdirAll(directory, 0o750); err != nil {
 		return err
@@ -42,6 +41,53 @@ func writeJSONAtomic(path string, value any, mode os.FileMode) error {
 	defer func() {
 		_ = os.Remove(tempName)
 	}()
+	if err := writeTempJSON(temp, payload, mode); err != nil {
+		return err
+	}
+	if err := os.Rename(tempName, path); err != nil {
+		return err
+	}
+	return syncDirectory(directory)
+}
+
+// writeJSONExclusive publishes a JSON file that must not already exist. The
+// final link step is atomic, so a concurrent creator either wins alone or
+// receives os.ErrExist; no partially written record is ever visible.
+func writeJSONExclusive(path string, value any, mode os.FileMode) error {
+	payload, err := marshalJSON(value)
+	if err != nil {
+		return err
+	}
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(directory, ".write-*")
+	if err != nil {
+		return err
+	}
+	tempName := temp.Name()
+	defer func() {
+		_ = os.Remove(tempName)
+	}()
+	if err := writeTempJSON(temp, payload, mode); err != nil {
+		return err
+	}
+	if err := os.Link(tempName, path); err != nil {
+		return err
+	}
+	return syncDirectory(directory)
+}
+
+func marshalJSON(value any) ([]byte, error) {
+	payload, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(payload, '\n'), nil
+}
+
+func writeTempJSON(temp *os.File, payload []byte, mode os.FileMode) error {
 	if err := temp.Chmod(mode); err != nil {
 		_ = temp.Close()
 		return err
@@ -54,13 +100,7 @@ func writeJSONAtomic(path string, value any, mode os.FileMode) error {
 		_ = temp.Close()
 		return err
 	}
-	if err := temp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tempName, path); err != nil {
-		return err
-	}
-	return syncDirectory(directory)
+	return temp.Close()
 }
 
 func readJSON(path string, target any) error {

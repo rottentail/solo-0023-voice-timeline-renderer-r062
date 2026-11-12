@@ -159,11 +159,22 @@ var/voice-timeline/
     output.wav
     receipt.json
   tmp/
+    lease-<token>.owner
+    source-<token>-*/
+    render-<token>-*/
 ```
 
 Source and render folders are assembled in `tmp/` and moved into place with one
 directory rename. Metadata updates use same-directory temporary files followed
 by rename.
+
+Several service processes may share one data directory. Each process holds an
+exclusive advisory lock on its `lease-*.owner` file for its lifetime, and
+staging directories embed the owner token in their name. A process reclaims only
+staging whose owner lease is no longer locked (the owner exited) or, at startup,
+ownerless staging old enough to predate the lease scheme. Concurrent
+registrations, render publications and restarts therefore leave each other's
+live media and completed artifacts untouched.
 
 ## Source layout
 

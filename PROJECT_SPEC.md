@@ -162,8 +162,12 @@ Errors use a JSON envelope:
 - State transitions: render jobs persist every active and terminal transition.
 - Error propagation: domain errors retain stable codes through HTTP responses.
 - Resource lifecycle: temporary files are cleaned after failed publication.
+  Leftover media is reclaimed only when its owner is provably gone, so a
+  restart or one failed request cannot discard another process's live work.
 - Concurrency: storage guards indexes and registry updates; unique IDs and
-  atomic renames prevent duplicate or half-visible records.
+  atomic renames prevent duplicate or half-visible records. Multiple processes
+  may share one data directory: each staging owner holds a process lease, and
+  terminal render states are never overwritten by a racing request.
 - Validation boundaries: request size, PCM layout, timeline bounds, and gain
   ranges are checked before allocation-heavy work.
 

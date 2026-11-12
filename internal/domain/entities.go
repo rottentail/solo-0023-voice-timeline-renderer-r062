@@ -102,6 +102,10 @@ type RenderReceipt struct {
 	CreatedAt     time.Time            `json:"created_at"`
 }
 
+func TerminalRenderState(state RenderState) bool {
+	return state == RenderCompleted || state == RenderFailed
+}
+
 func ValidRenderTransition(from, to RenderState) bool {
 	switch from {
 	case RenderQueued:

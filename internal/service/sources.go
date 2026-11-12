@@ -80,6 +80,18 @@ func (s *Service) CreateSource(ctx context.Context, id string, request SourceWri
 		CreatedAt:     time.Now().UTC(),
 	}
 	if err := s.repo.SaveSource(asset, payload); err != nil {
+		// Another process may have published the same identifier between our
+		// existence check and our commit. Resolve that idempotently instead
+		// of surfacing a conflict for identical content.
+		if appErr := domain.AsAppError(err); appErr.Kind == domain.KindConflict {
+			existing, getErr := s.repo.GetSourceMeta(id)
+			if getErr == nil {
+				if existing.Digest != digest || existing.Name != request.Name {
+					return domain.SourceAsset{}, false, domain.E(domain.KindConflict, "source_conflict", "source_id", "identifier is already bound to different source content")
+				}
+				return existing, false, nil
+			}
+		}
 		return domain.SourceAsset{}, false, err
 	}
 	return asset, true, nil

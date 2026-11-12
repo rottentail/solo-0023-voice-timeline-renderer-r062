@@ -16,7 +16,12 @@ func (repo *Repository) SaveTimeline(plan domain.Timeline) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return domain.Wrap(domain.KindInternal, "storage_error", "", "cannot inspect timeline destination", err)
 	}
-	if err := writeJSONAtomic(path, plan, 0o640); err != nil {
+	// Publish with an exclusive link so two processes registering the same
+	// identifier cannot overwrite one another's ready timeline.
+	if err := writeJSONExclusive(path, plan, 0o640); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return domain.E(domain.KindConflict, "timeline_conflict", "timeline_id", "timeline identifier already exists")
+		}
 		return domain.Wrap(domain.KindInternal, "storage_error", "", "cannot write timeline", err)
 	}
 	return nil
